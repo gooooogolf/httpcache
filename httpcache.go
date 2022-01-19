@@ -21,7 +21,6 @@ func newClient(client *http.Client, cacheInteractor cache.ICacheInteractor) (cac
 }
 
 // NewWithRedisCache will create a complete cache-support of HTTP client with using redis cache.
-// If the duration not set, the cache will use LFU algorithm
 func NewWithRedisCache(client *http.Client, options *rediscache.CacheOptions,
 	duration ...time.Duration) (cachedHandler *CacheHandler, err error) {
 	var ctx = context.Background()

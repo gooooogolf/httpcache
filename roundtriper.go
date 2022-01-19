@@ -16,6 +16,8 @@ import (
 // Headers
 const (
 	HeaderAuthorization = "Authorization"
+	XHTTPCache          = "X-HTTPCache"
+	XHTTPCacheOrigin    = "X-HTTPCache-Origin"
 )
 
 // CacheHandler custom plugable' struct of implementation of the http.RoundTripper
@@ -40,10 +42,11 @@ func (r *CacheHandler) RoundTrip(req *http.Request) (resp *http.Response, err er
 
 	cachedResp, cachedErr := getCachedResponse(r.CacheInteractor, req)
 	if cachedResp != nil && cachedErr == nil {
+		buildTheCachedResponseHeader(cachedResp, r.CacheInteractor.Origin())
 		return cachedResp, cachedErr
 	}
 
-	// if error when getting from cachce, ignore it, re-try a live version
+	// if error when getting from cache, ignore it, re-try a live version
 	if cachedErr != nil {
 		log.Println(cachedErr, "failed to retrieve from cache, trying with a live version")
 	}
@@ -62,13 +65,13 @@ func (r *CacheHandler) RoundTrip(req *http.Request) (resp *http.Response, err er
 }
 
 func getCachedResponse(cacheInteractor cache.ICacheInteractor, req *http.Request) (resp *http.Response, err error) {
-	cachedResp, err := cacheInteractor.Get(getCacheKey(req))
+	cachedResponse, err := cacheInteractor.Get(getCacheKey(req))
 	if err != nil {
 		return
 	}
 
-	cachedResponse := bytes.NewBuffer(cachedResp.DumpedResponse)
-	resp, err = http.ReadResponse(bufio.NewReader(cachedResponse), req)
+	dumpedResponse := bytes.NewBuffer(cachedResponse.DumpedResponse)
+	resp, err = http.ReadResponse(bufio.NewReader(dumpedResponse), req)
 	if err != nil {
 		return
 	}
@@ -107,4 +110,10 @@ func storeRespToCache(cacheInteractor cache.ICacheInteractor, req *http.Request,
 
 	err = cacheInteractor.Set(getCacheKey(req), cachedResp)
 	return
+}
+
+// buildTheCachedResponse will finalize the response header
+func buildTheCachedResponseHeader(resp *http.Response, origin string) {
+	resp.Header.Add(XHTTPCache, "true")
+	resp.Header.Add(XHTTPCacheOrigin, origin)
 }
