@@ -32,7 +32,7 @@ func NewCache(ctx context.Context, c *redis.Client, exptime time.Duration) cache
 }
 
 func (i *redisCache) Set(key string, value []byte) (err error) {
-	set := i.cache.Set(i.ctx, key, value, i.expiryTime*time.Second)
+	set := i.cache.Set(i.ctx, key, value, i.expiryTime)
 	if err := set.Err(); err != nil {
 		fmt.Println(err)
 		return cache.ErrStorageInternal
