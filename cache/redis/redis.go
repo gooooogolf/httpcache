@@ -2,7 +2,6 @@ package redis
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -32,9 +31,8 @@ func NewCache(ctx context.Context, c *redis.Client, exptime time.Duration) cache
 	}
 }
 
-func (i *redisCache) Set(key string, value cache.CachedResponse) (err error) {
-	valueJSON, _ := json.Marshal(value)
-	set := i.cache.Set(i.ctx, key, string(valueJSON), i.expiryTime*time.Second)
+func (i *redisCache) Set(key string, value []byte) (err error) {
+	set := i.cache.Set(i.ctx, key, value, i.expiryTime*time.Second)
 	if err := set.Err(); err != nil {
 		fmt.Println(err)
 		return cache.ErrStorageInternal
@@ -42,19 +40,17 @@ func (i *redisCache) Set(key string, value cache.CachedResponse) (err error) {
 	return nil
 }
 
-func (i *redisCache) Get(key string) (res cache.CachedResponse, err error) {
+func (i *redisCache) Get(key string) (res []byte, err error) {
 	get := i.cache.Do(i.ctx, "get", key)
 	if err = get.Err(); err != nil {
 		if err == redis.Nil {
-			return cache.CachedResponse{}, cache.ErrCacheMissed
+			return nil, cache.ErrCacheMissed
 		}
-		return cache.CachedResponse{}, cache.ErrStorageInternal
+		return nil, cache.ErrStorageInternal
 	}
+
 	val := get.Val().(string)
-	err = json.Unmarshal([]byte(val), &res)
-	if err != nil {
-		return cache.CachedResponse{}, cache.ErrStorageInternal
-	}
+	res = []byte(val)
 	return
 }
 

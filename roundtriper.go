@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"strings"
-	"time"
 
 	"github.com/gooooogolf/httpcache/cache"
 )
@@ -70,7 +69,7 @@ func getCachedResponse(cacheInteractor cache.ICacheInteractor, req *http.Request
 		return
 	}
 
-	dumpedResponse := bytes.NewBuffer(cachedResponse.DumpedResponse)
+	dumpedResponse := bytes.NewBuffer(cachedResponse)
 	resp, err = http.ReadResponse(bufio.NewReader(dumpedResponse), req)
 	if err != nil {
 		return
@@ -96,19 +95,12 @@ func getCacheKey(req *http.Request) (key string) {
 }
 
 func storeRespToCache(cacheInteractor cache.ICacheInteractor, req *http.Request, resp *http.Response) (err error) {
-	cachedResp := cache.CachedResponse{
-		RequestMethod: req.Method,
-		RequestURI:    req.RequestURI,
-		CachedTime:    time.Now(),
-	}
-
 	dumpedResponse, err := httputil.DumpResponse(resp, true)
 	if err != nil {
 		return
 	}
-	cachedResp.DumpedResponse = dumpedResponse
 
-	err = cacheInteractor.Set(getCacheKey(req), cachedResp)
+	err = cacheInteractor.Set(getCacheKey(req), dumpedResponse)
 	return
 }
 
