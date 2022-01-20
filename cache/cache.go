@@ -27,4 +27,5 @@ type ICacheInteractor interface {
 	Delete(key string) error
 	Flush() error
 	Origin() string
+	ExpiresIn(key string) string
 }

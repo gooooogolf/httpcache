@@ -17,6 +17,7 @@ const (
 	HeaderAuthorization = "Authorization"
 	XHTTPCache          = "X-HTTPCache"
 	XHTTPCacheOrigin    = "X-HTTPCache-Origin"
+	XHTTPCacheExpiresIn = "X-HTTPCache-ExpiresIn"
 )
 
 // CacheHandler custom plugable' struct of implementation of the http.RoundTripper
@@ -41,7 +42,7 @@ func (r *CacheHandler) RoundTrip(req *http.Request) (resp *http.Response, err er
 
 	cachedResp, cachedErr := getCachedResponse(r.CacheInteractor, req)
 	if cachedResp != nil && cachedErr == nil {
-		buildTheCachedResponseHeader(cachedResp, r.CacheInteractor.Origin())
+		buildTheCachedResponseHeader(r.CacheInteractor, req, cachedResp)
 		return cachedResp, cachedErr
 	}
 
@@ -105,7 +106,8 @@ func storeRespToCache(cacheInteractor cache.ICacheInteractor, req *http.Request,
 }
 
 // buildTheCachedResponse will finalize the response header
-func buildTheCachedResponseHeader(resp *http.Response, origin string) {
+func buildTheCachedResponseHeader(cacheInteractor cache.ICacheInteractor, req *http.Request, resp *http.Response) {
 	resp.Header.Add(XHTTPCache, "true")
-	resp.Header.Add(XHTTPCacheOrigin, origin)
+	resp.Header.Add(XHTTPCacheOrigin, cacheInteractor.Origin())
+	resp.Header.Add(XHTTPCacheExpiresIn, cacheInteractor.ExpiresIn(getCacheKey(req)))
 }

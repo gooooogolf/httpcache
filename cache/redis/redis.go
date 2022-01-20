@@ -74,3 +74,9 @@ func (i *redisCache) Flush() error {
 	}
 	return nil
 }
+
+func (i *redisCache) ExpiresIn(key string) string {
+	ttl := i.cache.TTL(i.ctx, key)
+
+	return ttl.Val().String()
+}
