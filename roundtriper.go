@@ -15,9 +15,11 @@ import (
 // Headers
 const (
 	HeaderAuthorization = "Authorization"
-	XHTTPCache          = "X-HTTPCache"
-	XHTTPCacheOrigin    = "X-HTTPCache-Origin"
-	XHTTPCacheExpiresIn = "X-HTTPCache-ExpiresIn"
+
+	XHTTPCache          = "X-PHUB-Cache"
+	XHTTPCacheOrigin    = "X-PHUB-Origin"
+	XHTTPCacheExpiresIn = "X-PHUB-ExpiresIn"
+	XHTTPCacheKey       = "X-PHUB-Cache-Key"
 )
 
 // CacheHandler custom plugable' struct of implementation of the http.RoundTripper
@@ -39,16 +41,18 @@ func NewCacheHandlerRoundtrip(defaultRoundTripper http.RoundTripper, cacheActor 
 
 // RoundTrip the implementation of http.RoundTripper
 func (r *CacheHandler) RoundTrip(req *http.Request) (resp *http.Response, err error) {
+	allowCache := allowedCache((req))
+	if allowCache {
+		cachedResp, cachedErr := getCachedResponse(r.CacheInteractor, req)
+		if cachedResp != nil && cachedErr == nil {
+			buildTheCachedResponseHeader(r.CacheInteractor, req, cachedResp)
+			return cachedResp, cachedErr
+		}
 
-	cachedResp, cachedErr := getCachedResponse(r.CacheInteractor, req)
-	if cachedResp != nil && cachedErr == nil {
-		buildTheCachedResponseHeader(r.CacheInteractor, req, cachedResp)
-		return cachedResp, cachedErr
-	}
-
-	// if error when getting from cache, ignore it, re-try a live version
-	if cachedErr != nil {
-		log.Println(cachedErr, "failed to retrieve from cache, trying with a live version")
+		// if error when getting from cache, ignore it, re-try a live version
+		if cachedErr != nil {
+			log.Println(cachedErr, "failed to retrieve from cache, trying with a live version")
+		}
 	}
 
 	resp, err = r.DefaultRoundTripper.RoundTrip(req)
@@ -56,11 +60,14 @@ func (r *CacheHandler) RoundTrip(req *http.Request) (resp *http.Response, err er
 		return
 	}
 
-	err = storeRespToCache(r.CacheInteractor, req, resp)
-	if err != nil {
-		log.Printf("Can't store the response to database, plase check. Err: %v\n", err)
-		err = nil // set err back to nil to make the call still success.
+	if allowCache {
+		err = storeRespToCache(r.CacheInteractor, req, resp)
+		if err != nil {
+			log.Printf("Can't store the response to database, plase check. Err: %v\n", err)
+			err = nil // set err back to nil to make the call still success.
+		}
 	}
+
 	return
 }
 
@@ -80,18 +87,21 @@ func getCachedResponse(cacheInteractor cache.ICacheInteractor, req *http.Request
 }
 
 func getCacheKey(req *http.Request) (key string) {
-	// key = fmt.Sprintf("%s_%s_%s", req.Method, req.Host, req.URL.Path)
 	// make sure the request URI corresponds the rewritten URL
 	req.RequestURI = req.URL.Path
 	if req.URL.RawQuery != "" {
 		req.RequestURI = strings.Join([]string{req.RequestURI, "?", req.URL.RawQuery}, "")
 	}
-
-	key = fmt.Sprintf("%s %s", req.Method, req.RequestURI)
+	key = fmt.Sprintf("%s_%s", req.Method, req.RequestURI)
 
 	if req.Header.Get(HeaderAuthorization) != "" {
-		key = fmt.Sprintf("%s %s", key, req.Header.Get(HeaderAuthorization))
+		key = fmt.Sprintf("%s_%s", key, req.Header.Get(HeaderAuthorization))
 	}
+
+	if req.Header.Get(XHTTPCacheKey) != "" {
+		key = fmt.Sprintf("%s_%s", key, req.Header.Get(XHTTPCacheKey))
+	}
+
 	return
 }
 
@@ -109,5 +119,10 @@ func storeRespToCache(cacheInteractor cache.ICacheInteractor, req *http.Request,
 func buildTheCachedResponseHeader(cacheInteractor cache.ICacheInteractor, req *http.Request, resp *http.Response) {
 	resp.Header.Add(XHTTPCache, "true")
 	resp.Header.Add(XHTTPCacheOrigin, cacheInteractor.Origin())
-	resp.Header.Add(XHTTPCacheExpiresIn, cacheInteractor.ExpiresIn(getCacheKey(req)))
+	// resp.Header.Add(XHTTPCacheExpiresIn, cacheInteractor.ExpiresIn(getCacheKey(req)))
+}
+
+func allowedCache(req *http.Request) (ok bool) {
+	return req.Header.Get(XHTTPCacheKey) != "" &&
+		strings.Contains("GET POST", strings.ToUpper(req.Method))
 }
